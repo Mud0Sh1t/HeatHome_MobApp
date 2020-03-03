@@ -4,6 +4,7 @@ import '../services/authentification.dart';
 import '../models/todo.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'dart:async';
+import 'formClientPage.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({Key key, this.auth, this.userId, this.logoutCallback})
@@ -36,7 +37,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     //_checkEmailVerification();
-
+    
     _todoList = new List();
     _todoQuery = _database
         .reference()
@@ -44,8 +45,7 @@ class _HomePageState extends State<HomePage> {
         .orderByChild("userId")
         .equalTo(widget.userId);
     _onTodoAddedSubscription = _todoQuery.onChildAdded.listen(onEntryAdded);
-    _onTodoChangedSubscription =
-        _todoQuery.onChildChanged.listen(onEntryChanged);
+    _onTodoChangedSubscription = _todoQuery.onChildChanged.listen(onEntryChanged);
   }
 
   @override
@@ -140,7 +140,7 @@ class _HomePageState extends State<HomePage> {
         });
   }
 
-  Widget showTodoList() {
+  Widget showTodoList(FirebaseUser data) {
     if (_todoList.length > 0) {
       return ListView.builder(
           shrinkWrap: true,
@@ -176,34 +176,97 @@ class _HomePageState extends State<HomePage> {
             );
           });
     } else {
+      String email = data.email;
+      print(email);
       return Center(
           child: Text(
-        "Welcome. Your list is empty.",
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 30.0),
-      ));
+            "Welcome " + email +". Your list is empty.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 30.0),
+          )
+        );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return new Scaffold(
-        appBar: new AppBar(
-          title: new Text('HeatHome'),
-          actions: <Widget>[
-            new FlatButton(
-                child: new Text('Logout',
-                    style: new TextStyle(fontSize: 17.0, color: Colors.white)),
-                onPressed: signOut)
-          ],
-        ),
-        body: showTodoList(),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            showAddTodoDialog(context);
-          },
-          tooltip: 'Increment',
-          child: Icon(Icons.add),
-        ));
+    return FutureBuilder<FirebaseUser>(
+      builder: (BuildContext context, AsyncSnapshot<FirebaseUser> snapshot) {
+        List<Widget> children;
+        if (snapshot.hasData) {
+          return new Scaffold(
+            appBar: new AppBar(
+              title: new Text('HeatHome'),
+              actions: <Widget>[
+                new FlatButton(
+                    child: new Text('Logout',
+                      style: new TextStyle(fontSize: 17.0, color: Colors.white)),
+                    onPressed: signOut)
+                ],
+            ),
+            body: showTodoList(snapshot.data),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                //showAddTodoDialog(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) {
+                  return FormScreen(user : snapshot.data);
+                }));
+              },
+              tooltip: 'Increment',
+              child: Icon(Icons.add),
+            )
+          );
+        } else if (snapshot.hasError) {
+          children = <Widget>[
+            Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Text('Error: ${snapshot.error}'),
+            )
+          ];
+        } else {
+          return new Scaffold(
+            appBar: new AppBar(
+              title: new Text('HeatHome'),
+              actions: <Widget>[
+                new FlatButton(
+                    child: new Text('Logout',
+                      style: new TextStyle(fontSize: 17.0, color: Colors.white)),
+                    onPressed: signOut)
+                ],
+            ),
+            body: 
+            Center(
+              child:Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  SizedBox(
+                    child: CircularProgressIndicator(),
+                    width: 60,
+                    height: 60,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Text('Awaiting result...'),
+                  )
+                ],
+              )
+            )
+          );
+        }
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: children,
+          ),
+        );
+      },
+      future: widget.auth.getCurrentUser(),
+    );
   }
 }
