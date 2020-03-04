@@ -1,75 +1,34 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/authentification.dart';
-import '../models/todo.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'dart:async';
+import '../models/client.dart';
 import 'formClientPage.dart';
 
 class HomePage extends StatefulWidget {
-  HomePage({Key key, this.auth, this.userId, this.logoutCallback})
+  HomePage({Key key, this.auth, this.userId, this.userMail, this.logoutCallback})
       : super(key: key);
 
   final BaseAuth auth;
   final VoidCallback logoutCallback;
   final String userId;
+  final String userMail;
 
   @override
   State<StatefulWidget> createState() => new _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  List<Todo> _todoList;
-
-  final FirebaseDatabase _database = FirebaseDatabase.instance;
-  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-
-  final _textEditingController = TextEditingController();
-  StreamSubscription<Event> _onTodoAddedSubscription;
-  StreamSubscription<Event> _onTodoChangedSubscription;
-
-  Query _todoQuery;
-
-  //bool _isEmailVerified = false;
+  final fireStoreReference = Firestore.instance;
 
   @override
   void initState() {
     super.initState();
-
-    //_checkEmailVerification();
-    
-    _todoList = new List();
-    _todoQuery = _database
-        .reference()
-        .child("todo")
-        .orderByChild("userId")
-        .equalTo(widget.userId);
-    _onTodoAddedSubscription = _todoQuery.onChildAdded.listen(onEntryAdded);
-    _onTodoChangedSubscription = _todoQuery.onChildChanged.listen(onEntryChanged);
+    getClients();
   }
 
   @override
   void dispose() {
-    _onTodoAddedSubscription.cancel();
-    _onTodoChangedSubscription.cancel();
     super.dispose();
-  }
-
-  onEntryChanged(Event event) {
-    var oldEntry = _todoList.singleWhere((entry) {
-      return entry.key == event.snapshot.key;
-    });
-
-    setState(() {
-      _todoList[_todoList.indexOf(oldEntry)] =
-          Todo.fromSnapshot(event.snapshot);
-    });
-  }
-
-  onEntryAdded(Event event) {
-    setState(() {
-      _todoList.add(Todo.fromSnapshot(event.snapshot));
-    });
   }
 
   signOut() async {
@@ -81,106 +40,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  addNewTodo(String todoItem) {
-    if (todoItem.length > 0) {
-      Todo todo = new Todo(todoItem.toString(), widget.userId, false);
-      _database.reference().child("todo").push().set(todo.toJson());
-    }
+  deleteTodo(String todoId) {
+    Firestore.instance.collection("clients").document(todoId).delete();
   }
 
-  updateTodo(Todo todo) {
-    //Toggle completed
-    todo.completed = !todo.completed;
-    if (todo != null) {
-      _database.reference().child("todo").child(todo.key).set(todo.toJson());
-    }
+  Future<List<Client>> getClients() async {
+      QuerySnapshot qs = await Firestore.instance.collection("clients").getDocuments();
+
+      List<DocumentSnapshot> usersDS = qs.documents;
+
+      List<Client> allClient = [];
+
+      for (num i = 0 ; i < usersDS.length; i ++) {
+        Client c = Client.fromSnapshot(usersDS.elementAt(i));
+        allClient.add(c);
+        print(c);
+      }
+      return allClient;
   }
 
-  deleteTodo(String todoId, int index) {
-    _database.reference().child("todo").child(todoId).remove().then((_) {
-      print("Delete $todoId successful");
-      setState(() {
-        _todoList.removeAt(index);
-      });
-    });
-  }
-
-  showAddTodoDialog(BuildContext context) async {
-    _textEditingController.clear();
-    await showDialog<String>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            content: new Row(
-              children: <Widget>[
-                new Expanded(
-                    child: new TextField(
-                  controller: _textEditingController,
-                  autofocus: true,
-                  decoration: new InputDecoration(
-                    labelText: 'Add new todo',
-                  ),
-                ))
-              ],
-            ),
-            actions: <Widget>[
-              new FlatButton(
-                  child: const Text('Cancel'),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  }),
-              new FlatButton(
-                  child: const Text('Save'),
-                  onPressed: () {
-                    addNewTodo(_textEditingController.text.toString());
-                    Navigator.pop(context);
-                  })
-            ],
-          );
-        });
-  }
-
-  Widget showTodoList(FirebaseUser data) {
-    if (_todoList.length > 0) {
+  Widget showTodoList(List<Client> clients) {
+    print(clients);
+    if (clients.length > 0) {
       return ListView.builder(
           shrinkWrap: true,
-          itemCount: _todoList.length,
+          itemCount: clients.length,
           itemBuilder: (BuildContext context, int index) {
-            String todoId = _todoList[index].key;
-            String subject = _todoList[index].subject;
-            bool completed = _todoList[index].completed;
-            String userId = _todoList[index].userId;
-            return Dismissible(
-              key: Key(todoId),
-              background: Container(color: Colors.red),
-              onDismissed: (direction) async {
-                deleteTodo(todoId, index);
-              },
-              child: ListTile(
-                title: Text(
-                  subject,
-                  style: TextStyle(fontSize: 20.0),
+            String todoId = clients[index].key;
+            String name = clients[index].name;
+            String city = clients[index].city;
+            String address = clients[index].address;
+            String prospect = null;
+            if(prospect == widget.userMail){
+              return Dismissible(
+                key: Key(todoId),
+                background: Container(color: Colors.red),
+                onDismissed: (direction) async {
+                  deleteTodo(todoId);
+                },
+                child: ListTile(
+                  title: Text(
+                    name,
+                    style: TextStyle(fontSize: 20.0),
+                  ),
                 ),
-                trailing: IconButton(
-                    icon: (completed)
-                        ? Icon(
-                            Icons.done_outline,
-                            color: Colors.green,
-                            size: 20.0,
-                          )
-                        : Icon(Icons.done, color: Colors.grey, size: 20.0),
-                    onPressed: () {
-                      updateTodo(_todoList[index]);
-                    }),
-              ),
-            );
+              );
+            }
           });
     } else {
-      String email = data.email;
-      print(email);
       return Center(
           child: Text(
-            "Welcome " + email +". Your list is empty.",
+            "Welcome " + widget.userMail +". Your list is empty.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 30.0),
           )
@@ -190,8 +100,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<FirebaseUser>(
-      builder: (BuildContext context, AsyncSnapshot<FirebaseUser> snapshot) {
+    return FutureBuilder<List<Client>>(
+      builder: (BuildContext context,AsyncSnapshot<List<Client>> snapshot) {
         List<Widget> children;
         if (snapshot.hasData) {
           return new Scaffold(
@@ -207,12 +117,15 @@ class _HomePageState extends State<HomePage> {
             body: showTodoList(snapshot.data),
             floatingActionButton: FloatingActionButton(
               onPressed: () {
-                //showAddTodoDialog(context);
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) {
-                  return FormScreen(user : snapshot.data);
+                  return FormScreen(
+                    userId: widget.userId,
+                    userMail: widget.userMail,
+                    auth: widget.auth,
+                    logoutCallback: widget.logoutCallback,
+                  );
                 }));
               },
-              tooltip: 'Increment',
               child: Icon(Icons.add),
             )
           );
@@ -266,7 +179,7 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
-      future: widget.auth.getCurrentUser(),
+      future: getClients(),
     );
   }
 }
