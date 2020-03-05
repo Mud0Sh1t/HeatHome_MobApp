@@ -1,6 +1,6 @@
 # HeatHome
 
-A new Flutter project.
+A new Flutter project for a application mobile with Flutter and Firebase Cloud.
 
 ## Getting Started
 
