@@ -1,6 +1,5 @@
 import 'dart:ui';
-import 'package:HeatHome/page/homePage.dart';
-import 'package:HeatHome/services/authentification.dart';
+import 'package:HeatHome/models/Client.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,11 +8,9 @@ class FormScreen extends StatelessWidget {
 
   final databaseReference = Firestore.instance;
 
-  FormScreen({Key key, this.auth, this.userId, this.userMail, this.logoutCallback}): super(key: key);
-
-  final BaseAuth auth;
-  final VoidCallback logoutCallback;
-  final String userId;
+  FormScreen({Key key, this.customer, this.userMail}): super(key: key);
+  
+  final Client customer;
   final String userMail;
 
   final _formKey = GlobalKey<FormState>();
@@ -26,6 +23,9 @@ class FormScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     print(this.userMail);
+
+    String msg = (customer != null) ? "Update customer" : "Add a customer";
+
     return new Scaffold(
       appBar: new AppBar(
         title: new Text('HeatHome form'),
@@ -36,7 +36,7 @@ class FormScreen extends StatelessWidget {
           child: Column(
             children : <Widget>[
               Text(
-                "Add a new customer",
+                msg,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 30.0),
               ),
@@ -53,6 +53,7 @@ class FormScreen extends StatelessWidget {
                       decoration: const InputDecoration(
                         hintText: 'Enter name',
                       ),
+                      initialValue: (customer != null) ? customer.name : null,
                       validator: (value) {
                         if (value.isEmpty) {
                           return 'Please enter name';
@@ -69,6 +70,7 @@ class FormScreen extends StatelessWidget {
                       decoration: const InputDecoration(
                         hintText: 'Enter City',
                       ),
+                      initialValue: (customer != null) ? customer.city : null,
                       validator: (value) {
                         if (value.isEmpty) {
                           return 'Please enter city';
@@ -85,6 +87,7 @@ class FormScreen extends StatelessWidget {
                       decoration: const InputDecoration(
                         hintText: 'Enter Adress',
                       ),
+                      initialValue: (customer != null) ? customer.address : null,
                       validator: (value) {
                         if (value.isEmpty) {
                           return 'Please enter adress';
@@ -101,11 +104,15 @@ class FormScreen extends StatelessWidget {
                       decoration: const InputDecoration(
                         hintText: 'Enter Price',
                       ),
+                      initialValue: (customer != null) ? customer.prixProduit : null,
                       keyboardType: TextInputType.number,
                       inputFormatters: [WhitelistingTextInputFormatter.digitsOnly],
                       validator: (value) {
+                        int number = num.parse(value);
                         if (value.isEmpty) {
                           return 'Please enter a price';
+                        }else if(number > 100){
+                          return 'Please enter a price between 0 - 100';
                         }
                         return null;
                       },
@@ -114,36 +121,56 @@ class FormScreen extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       child: RaisedButton(
-                        onPressed: () {
-                          // Validate will return true if the form is valid, or false if
-                          // the form is invalid.
+                        onPressed: () async {
                           if (_formKey.currentState.validate()) {
-                            // Process data.
                             _formKey.currentState.save();
-                            var dataClient = {
+                            if(customer != null){
+                              QuerySnapshot vente = await databaseReference.collection("ventes")
+                              .where("clientRef", isEqualTo: "/clients/"+customer.key).getDocuments();
+
+                              String idVente = vente.documents.first.documentID;
+                              
+                              var dataClientUpdate = {
+                                "name": _name,
+                                "city": _city,
+                                "address": _address,
+                                "prixProduit": _prixProduit,
+                                "proscpect": customer.prospect,
+                                "status": 0
+                              };
+                              var dataVenteUpdate = {
+                                "clientRef": "/clients/"+customer.key,
+                                "prixProduit": _prixProduit,
+                                "prospect": customer.prospect,
+                                "status": 0
+                              };
+                              databaseReference.collection("clients").document(customer.key).updateData(dataClientUpdate);
+                              databaseReference.collection("ventes").document(idVente).updateData(dataVenteUpdate);
+                            }else{
+                              var dataClient = {
                               "name": _name,
                               "city": _city,
                               "address": _address,
                               "prixProduit": _prixProduit,
                               "proscpect": this.userMail,
                               "status": 0
-                            };
-                            var dataVente = {
-                              "clientRef": _name,
-                              "prixProduit": _prixProduit,
-                              "prospect": this.userMail,
-                              "status": 0
-                            };
-                            print(dataClient);
-                            databaseReference.collection("clients").add(dataClient);
-                            databaseReference.collection("ventes").add(dataVente);
+                              };
+                              
+                              DocumentReference c = await databaseReference.collection("clients").add(dataClient);
 
-                            return new HomePage(
-                              userId: userId,
-                              userMail: userMail,
-                              auth: auth,
-                              logoutCallback: logoutCallback,
-                            );
+                              String id = c.documentID;
+
+                              var dataVente = {
+                                  "clientRef": "/clients/"+id,
+                                  "prixProduit": _prixProduit,
+                                  "prospect": this.userMail,
+                                  "status": 0
+                              };
+                              
+                              databaseReference.collection("ventes").add(dataVente);
+
+                            }
+                            Navigator.pop(context);
                           }
                         },
                         child: Text('Submit'),

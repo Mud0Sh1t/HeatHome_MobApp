@@ -1,7 +1,7 @@
+import 'package:HeatHome/models/Client.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/authentification.dart';
-import '../models/client.dart';
 import 'formClientPage.dart';
 
 class HomePage extends StatefulWidget {
@@ -68,24 +68,32 @@ class _HomePageState extends State<HomePage> {
           itemBuilder: (BuildContext context, int index) {
             String todoId = clients[index].key;
             String name = clients[index].name;
-            String city = clients[index].city;
-            String address = clients[index].address;
-            String prospect = null;
-            if(prospect == widget.userMail){
               return Dismissible(
                 key: Key(todoId),
                 background: Container(color: Colors.red),
+                direction: DismissDirection.startToEnd,
                 onDismissed: (direction) async {
                   deleteTodo(todoId);
+                  Scaffold.of(context).showSnackBar(SnackBar(content: Text("Customer dismissed")));
                 },
                 child: ListTile(
                   title: Text(
                     name,
                     style: TextStyle(fontSize: 20.0),
                   ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.create),
+                    onPressed: () async {
+                      await Navigator.of(context).push(MaterialPageRoute(builder: (_) {
+                        return FormScreen(
+                          customer: clients[index],
+                          userMail: widget.userMail
+                        );
+                      }));
+                      this.setState(() { });
+                    }),
                 ),
               );
-            }
           });
     } else {
       return Center(
@@ -116,15 +124,14 @@ class _HomePageState extends State<HomePage> {
             ),
             body: showTodoList(snapshot.data),
             floatingActionButton: FloatingActionButton(
-              onPressed: () {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) {
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) {
                   return FormScreen(
-                    userId: widget.userId,
-                    userMail: widget.userMail,
-                    auth: widget.auth,
-                    logoutCallback: widget.logoutCallback,
+                    customer: null,
+                    userMail: widget.userMail
                   );
                 }));
+                this.setState(() { });
               },
               child: Icon(Icons.add),
             )
